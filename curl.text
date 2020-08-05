@@ -1,0 +1,8 @@
+# curl
+
+curl --location --request POST 'localhost:4567/create_task' \
+--form 'source=emit :stdout, payload: {"key": "value"}
+sleep 1
+puts '\''tick'\''
+sleep 1
+puts "tock"'
