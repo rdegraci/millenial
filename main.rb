@@ -8,7 +8,6 @@ require 'workers'
 require 'date'
 require 'json'
 
-@@group = Workers::TaskGroup.new
 REDIS = Redis.new(host: "localhost")
 GROUP = Workers::TaskGroup.new
 
