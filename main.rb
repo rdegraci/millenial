@@ -8,7 +8,9 @@ require 'workers'
 require 'date'
 require 'json'
 
+# Storage connection
 REDIS = Redis.new(host: "localhost")
+
 GROUP = Workers::TaskGroup.new
 
 class Consumer
@@ -64,6 +66,87 @@ Rocketman.configure do |config|
 end
 
 include Rocketman::Producer
+
+#########################
+# Pub/Sub via tags      #
+#########################
+
+# Create a publisher (a topic/channel that is associated with tags)
+# 
+# params:
+# {
+#   'publisher' => {
+#     'identifier' => 'guid'
+#     'name' => 'name',
+#     'topic' => 'topic',
+#     'tags' =>  ['tag1', 'tag2']
+#   }
+# }
+post '/publishers' do
+  publisher = params[:publisher]
+
+  REDIS.lpush("/publishers", publisher.to_json)
+  REDIS.write("/publishers/#{publisher['identifier']}", publisher.to_json)
+
+  REDIS.lpush("/topics/#{publisher['topic']}", publisher.to_json)
+
+  tags = publisher['tags']
+  tags.each do |tag|
+    REDIS.lpush("/tags/#{tag}", publisher.to_json)
+  end
+  publisher.to_json
+end
+
+
+# Publish a payload to any topic/channel that matches these tags
+# 
+# params:
+# {
+#   'payload' => {
+#     'tags' => ['tag1', 'tag2'],
+#     'key1' => 'value1'
+#     ...
+#   }
+# }
+post '/payloads' do
+  payload = params[:payload]
+  tags = payload['tags']
+  tags.each do |tag|
+    publishers = REDIS.lrange("/tags/#{tag}", 0, -1)
+    publishers.each do |publisher|
+      channel = publisher['topic']
+      emit(channel.to_sym, payload: payload) if channel && payload
+    end
+  end
+  payload.to_json
+end
+
+# Get topics/channels that match these tags
+# 
+# params:
+# {
+#   'tags' => ['tag1', 'tag2']
+# }
+get '/topics' do
+  tags = params[:tags]
+  topics = []
+  tags.each do |tag|
+    publishers = REDIS.lrange("/tags/#{tag}", 0, -1)
+    publishers.each do |publisher|
+      topics << publisher['topic']     
+    end
+  end
+  topics.to_json
+end
+
+
+get '/publishers' do
+  REDIS.lrange("/publishers", 0, -1).to_json
+end
+
+#########################
+# Programming Interface #
+#########################
 
 # params should be
 # {
