@@ -9,6 +9,8 @@ require 'date'
 require 'json'
 
 @@group = Workers::TaskGroup.new
+REDIS = Redis.new(host: "localhost")
+GROUP = Workers::TaskGroup.new
 
 class Consumer
   extend Rocketman::Consumer
@@ -37,13 +39,13 @@ class Consumer
 
   on_event :write do |payload|
   	key = payload[:payload]['key']
-  	@@redis.set key, payload.to_json
+  	REDIS.set key, payload.to_json
   end
 
   on_event :read do |payload|
   	key = payload[:payload]['key']
   	channel = payload[:payload]['channel']
-  	json = @@redis.get(key)
+  	json = REDIS.get(key)
   	emit(channel.to_sym, payload: json) if channel && json
   end
 
@@ -53,9 +55,7 @@ end
 # the Redis relay. This is because redis.psubscribe will hog the whole 
 # Redis connection (not just Ruby process), so Relay expects a dedicated 
 # connection for itself.
-@@redis = Redis.new(host: "localhost")
-
-Rocketman::Relay::Redis.new.start(@redis)
+Rocketman::Relay::Redis.new.start(Redis.new)
 
 Rocketman.configure do |config|
   config.worker_count = 10 # defaults to 5
